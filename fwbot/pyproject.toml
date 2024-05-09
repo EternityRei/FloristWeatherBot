@@ -12,6 +12,8 @@ langchain-openai = "^0.1.4"
 langchainhub = "^0.1.15"
 python-telegram-bot = "^21.1.1"
 python-dotenv = "^1.0.1"
+google-api-python-client = "^2.127.0"
+google-cloud-speech = "^2.26.0"
 
 
 [build-system]
@@ -19,4 +21,4 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-start = "djbot.start_up:start_up"
+start = "fwbot.start_up:start_up"
