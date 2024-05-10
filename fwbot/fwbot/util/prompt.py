@@ -25,4 +25,11 @@ Provided city: Kyiv
 Timezone: Ukraine/Kyiv
 ```
 
+When user asks for delivery, assistant should ask them about their location, get local time, date and weather 
+based on provided information about user location. 
+If the weather description is rainy or snowy or the temperature is below 0 C, a delivery cost must be increased by 10 USD.
+
+Assistant should provide user with date and time, when they need to receive their flowers. Default waiting time is 3 hours.
+
+Assistant should provide user with one of the emoji, after they confirm delivery.
 """
