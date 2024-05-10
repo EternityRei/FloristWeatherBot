@@ -5,6 +5,9 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from ..agent import Agent
 from .stt_handler import transcribe_audio
+from fwbot.util.utils import location_possibility, location, get_last_user_input
+from langchain.tools import tool
+from langchain_core.messages import HumanMessage
 
 
 async def handle_message(
@@ -12,12 +15,47 @@ async def handle_message(
         context: CallbackContext,
         custom_text: Optional[str] = None
 ) -> None:
-    agent = Agent()
     user_text = custom_text if custom_text is not None else update.message.text
-    print(user_text)
     chat_id = update.message.chat_id
-    agent_response = agent.ask(user_text)['output']
-    await context.bot.send_message(chat_id=chat_id, text=agent_response)
+    ask_for_location = [False]
+
+    @tool
+    def create_buttons_for_user_to_share_location():
+        """
+        Used to ask their location to get the weather, used just after user asked about weather.
+        Always use this function when you ask for user location for weather.
+        """
+        ask_for_location[0] = True
+
+    agent = Agent(additional_tools=[create_buttons_for_user_to_share_location])
+    agent_response = agent.ask(prompt=user_text, chat_history=context.user_data.get('chat_history', []))['output']
+
+    if update.message.location:
+        lat, lon = await location(update, context)
+        user_text = f'{lat}°N, {lon}°W'
+        agent_response = agent.ask(prompt=user_text, chat_history=context.user_data.get('chat_history', []))['output']
+        await context.bot.send_message(chat_id=chat_id, text=agent_response)
+        context.user_data['state'] = False
+    elif context.user_data.get('state', False) == 'waiting_for_answer':
+        result = update.message.text
+        if result == 'Choose city':
+            context.user_data['state'] = 'waiting_for_city'
+            await context.bot.send_message(chat_id=chat_id, text=agent_response)
+        else:
+            context.user_data['state'] = 'waiting_for_answer'
+            await context.bot.send_message(chat_id=chat_id, text="Please choose your option")
+    elif ask_for_location[0]:
+        await location_possibility(update)
+        context.user_data['state'] = 'waiting_for_answer'
+    elif context.user_data.get('state', False) == 'waiting_for_city':
+        context.user_data['state'] = False
+        await context.bot.send_message(chat_id=chat_id, text=agent_response)
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=agent_response)
+    chat_history = context.user_data.get('chat_history', [])
+    chat_history.append(HumanMessage(content=user_text))
+    chat_history.append(agent_response)
+    context.user_data['chat_history'] = chat_history
 
 
 async def voice_handle(update: Update, context: CallbackContext):
@@ -37,6 +75,7 @@ async def start_command_handler(
                 "climate, or just curious about today's forecast, I've got you covered with AI-powered insights. "
                 "Let's make every day a blooming success! 🌦️🌹")
     await context.bot.send_message(chat_id=chat_id, text=response)
+    # await location_possibility(update)
 
 
 def main():
@@ -49,5 +88,6 @@ def main():
     application.add_handler(start_handler)
     application.add_handler(text_handler)
     application.add_handler(voice_handler)
+    application.add_handler(MessageHandler(filters.LOCATION, lambda update, context: handle_message(update, context)))
 
     application.run_polling()
